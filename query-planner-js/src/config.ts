@@ -1,4 +1,8 @@
 import { Concrete } from "@apollo/federation-internals";
+import { QueryPlan } from ".";
+import { InMemoryLRUCache, KeyValueCache } from '@apollo/utils.keyvaluecache';
+
+export type QueryPlanCache = KeyValueCache<QueryPlan> & { clear: () => void }
 
 export type QueryPlannerConfig = {
   /**
@@ -51,6 +55,7 @@ export type QueryPlannerConfig = {
      */
     enableDefer?: boolean,
   }
+  cache?: QueryPlanCache,
 }
 
 export function enforceQueryPlannerConfigDefaults(
@@ -63,6 +68,7 @@ export function enforceQueryPlannerConfigDefaults(
     incrementalDelivery: {
       enableDefer: false,
     },
+    cache: new InMemoryLRUCache<QueryPlan>({maxSize: Math.pow(2, 20) * 50 }),
     ...config,
   };
 }
