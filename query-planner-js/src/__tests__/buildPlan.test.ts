@@ -1,10 +1,18 @@
-import { QueryPlanner } from '@apollo/query-planner';
+import { QueryPlanner, prettyFormatQueryPlan } from '@apollo/query-planner';
 import { assert, buildSchema, operationFromDocument, ServiceDefinition } from '@apollo/federation-internals';
 import gql from 'graphql-tag';
 import { MAX_COMPUTED_PLANS } from '../buildPlan';
 import { FetchNode, FlattenNode, SequenceNode } from '../QueryPlan';
 import { FieldNode, OperationDefinitionNode, parse } from 'graphql';
 import { composeAndCreatePlanner, composeAndCreatePlannerWithOptions } from './testHelper';
+import fs from 'fs';
+import path from 'path';
+
+export function getGraphQlFiles(directory: string): string[] {
+  let files = fs.readdirSync(directory);
+  files = files.filter((fl) => path.extname(fl).toLowerCase() === '.graphql');
+  return files;
+}
 
 describe('shareable root fields', () => {
   test('can use same root operation from multiple subgraphs in parallel', () => {
@@ -3592,7 +3600,7 @@ describe('Named fragments preservation', () => {
               }
             }
           }
-          
+
           fragment FooChildSelect on Foo {
             __typename
             foo
@@ -3607,7 +3615,7 @@ describe('Named fragments preservation', () => {
               }
             }
           }
-          
+
           fragment FooSelect on Foo {
             __typename
             foo
@@ -3772,7 +3780,7 @@ describe('Named fragments preservation', () => {
                   }
                 }
               }
-              
+
               fragment OnV on V {
                 a
                 b
@@ -3838,7 +3846,7 @@ describe('Named fragments preservation', () => {
               }
             }
           }
-          
+
           fragment Selection on A {
             x
             y
@@ -3925,7 +3933,7 @@ describe('Named fragments preservation', () => {
               }
             }
           }
-          
+
           fragment OnV on V {
             v
           }
@@ -4026,7 +4034,7 @@ describe('Named fragments preservation', () => {
               ...OnT @include(if: $test2)
             }
           }
-          
+
           fragment OnT on T {
             a
             b
@@ -5452,3 +5460,34 @@ test('handles case of key chains in parallel requires', () => {
     }
   `);
 });
+
+// test('Query plan error', () => {
+
+//   const graphSvcSDL = fs.readFileSync('schema/subgraph2/subgraphVNext.graphql', 'utf8');
+//   const graphSvcSDLNode = parse(graphSvcSDL);
+
+//   const graphSDL = fs.readFileSync('schema/subgraph1/subgraphV1.graphql', 'utf8');
+//   const graphSDLNode = parse(graphSDL);
+
+//   const subgraphV1 = {
+//     name: "graph",
+//     typeDefs: graphSDLNode,
+//   };
+//   const subgraphVNext = {
+//     name: "Agraph",
+//     typeDefs: graphSvcSDLNode,
+//   };
+
+//   const [api, queryPlanner] = composeAndCreatePlanner(subgraphV1, subgraphVNext);
+//   getGraphQlFiles('schema/QueryWithModification').forEach((fileName) => {
+//     try {
+//       console.log(fileName)
+//       const query = parse(fs.readFileSync('schema/QueryWithModification/'+fileName, 'utf8'));
+//       const operation = operationFromDocument(api, query);
+//       const plan = queryPlanner.buildQueryPlan(operation);
+//       console.log(prettyFormatQueryPlan);
+//       fs.writeFileSync('schema/QueryPlan/'+fileName, prettyFormatQueryPlan(plan));
+//     } catch(err){
+//       // console.log(err);
+//     }
+// });

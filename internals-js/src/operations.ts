@@ -51,6 +51,7 @@ import { ERRORS } from "./error";
 import { isDirectSubtype, sameType } from "./types";
 import { assert, mapEntries, MapWithCachedArrays, MultiMap, SetMultiMap } from "./utils";
 import { argumentsEquals, argumentsFromAST, isValidValue, valueToAST, valueToString } from "./values";
+import { createHash } from '@apollo/utils.createhash';
 
 function validate(condition: any, message: () => string, sourceAST?: ASTNode): asserts condition {
   if (!condition) {
@@ -240,7 +241,7 @@ export class Field<TArgs extends {[key: string]: any} = {[key: string]: any}> ex
     //    happens when we're building subgraph queries but using selections from the original query which is against the supergraph API schema.
     //  2. or they are not the same underlying type, and we only accept this if we're adding an interface field to a selection of one of its
     //    subtype, and this for convenience. Note that in that case too, `selectinParent` and `fieldParent` may or may be from the same exact
-    //    underlying schema, and so we avoid relying on `isDirectSubtype` in the check. 
+    //    underlying schema, and so we avoid relying on `isDirectSubtype` in the check.
     // In both cases, we just get the field from `selectionParent`, ensuring the return field parent _is_ `selectionParent`.
     const fieldParentType = this.definition.parent
     return parentType.name === fieldParentType.name
@@ -358,7 +359,7 @@ export class FragmentElement extends AbstractOperationElement<FragmentElement> {
     // schema.
     const { canRebase, rebasedCondition } = this.canRebaseOn(selectionParent);
     validate(
-      canRebase, 
+      canRebase,
       () => `Cannot add fragment of condition "${typeCondition}" (runtimes: [${possibleRuntimeTypes(typeCondition!)}]) to selection set of parent type "${selectionParent}" (runtimes: ${possibleRuntimeTypes(selectionParent)})`
     );
     return this.withUpdatedTypes(selectionParent, rebasedCondition);
@@ -588,13 +589,13 @@ export class Operation {
     readonly name?: string) {
   }
 
-  optimize(fragments?: NamedFragments, minUsagesToOptimize: number = 2): Operation {
-    assert(minUsagesToOptimize >= 1, `Expected 'minUsagesToOptimize' to be at least 1, but got ${minUsagesToOptimize}`)
+  optimize(fragments?: NamedFragments, minUsagesToOptimize: number = 1): Operation {
+    assert(minUsagesToOptimize >= 0, `Expected 'minUsagesToOptimize' to be at least 1, but got ${minUsagesToOptimize}`)
     if (!fragments || fragments.isEmpty()) {
       return this;
     }
 
-    let optimizedSelection = this.selectionSet.optimize(fragments);
+    let optimizedSelection = this.selectionSet.optimize(fragments, this.schema);
     if (optimizedSelection === this.selectionSet) {
       return this;
     }
@@ -1071,7 +1072,7 @@ export class SelectionSet extends Freezable<SelectionSet> {
     }
   }
 
-  optimize(fragments?: NamedFragments): SelectionSet {
+  optimize(fragments?: NamedFragments, schema?: Schema, ): SelectionSet {
     if (!fragments || fragments.isEmpty()) {
       return this;
     }
@@ -1086,7 +1087,7 @@ export class SelectionSet extends Freezable<SelectionSet> {
 
     const optimized = new SelectionSet(this.parentType, fragments);
     for (const selection of this.selections()) {
-      optimized.add(selection.optimize(fragments));
+      optimized.add(selection.optimize(fragments, schema));
     }
     return optimized;
   }
@@ -1598,8 +1599,8 @@ export class FieldSelection extends Freezable<FieldSelection> {
     }
   }
 
-  optimize(fragments: NamedFragments): Selection {
-    const optimizedSelection = this.selectionSet ? this.selectionSet.optimize(fragments) : undefined;
+  optimize(fragments: NamedFragments, schema?: Schema): Selection {
+    const optimizedSelection = this.selectionSet ? this.selectionSet.optimize(fragments, schema) : undefined;
     const fieldBaseType = baseType(this.field.definition.type!);
     if (isCompositeType(fieldBaseType) && optimizedSelection) {
       for (const candidate of fragments.maybeApplyingAtType(fieldBaseType)) {
@@ -1633,6 +1634,13 @@ export class FieldSelection extends Freezable<FieldSelection> {
           const fragmentSelection = new FragmentSpreadSelection(fieldBaseType, fragments, candidate.name);
           return new FieldSelection(this.field, selectionSetOf(fieldBaseType, fragmentSelection));
         }
+      }
+      if(schema){
+        const hash = createHash('sha256').update(optimizedSelection.toString()).digest('hex');
+        const newFragment = new NamedFragmentDefinition(schema, fieldBaseType + hash, fieldBaseType, optimizedSelection);
+        fragments.add(newFragment);
+        const newFragmentSelection = new FragmentSpreadSelection(fieldBaseType, fragments, newFragment.name);
+        return new FieldSelection(this.field, selectionSetOf(fieldBaseType, newFragmentSelection));
       }
     }
 
